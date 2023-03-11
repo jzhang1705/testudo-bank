@@ -1582,4 +1582,348 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
     cryptoTransactionTester.test(cryptoTransaction);
   }
 
+  /**
+   * Private function that deposits an amount in dollars a specific number of times for the user into the database.
+   * Retrieves the data of the user after the deposit from the database 
+   * Used to check if deposits are updated correctly within the database,
+   * especially for other features (ie NumDepositsForInterest) that rely on deposits
+   * 
+   * @return The customer's personal data in the form of a map. The key is a string that describes the 
+   * information type (ie "LastName", "Balance"). The value is an object that stores the personal information 
+   * corresponding to key (ie "Zhang", 100).
+   */
+  private Map<String, Object> depositMultipleTimesAndRetrieveCustomerData(User customer, double depositAmount, int times) {
+    for(int i = 0; i < times; i++) {
+      customer.setAmountToDeposit(depositAmount);
+      controller.submitDeposit(customer);
+    }
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    return customersTableData.get(0);
+  }
+
+  /**
+   * Private function that withdraws an amount in dollars a specific number of times for the user into the database.
+   * Retrieves the data of the user after the withdraws from the database 
+   * Used to check if withdraws are updated correctly within the database,
+   * especially for other features (ie NumDepositsForInterest) that rely on deposits
+   * 
+   * @return The customer's personal data in the form of a map. The key is a string that describes the 
+   * information type (ie "LastName", "Balance"). The value is an object that stores the personal information 
+   * corresponding to key (ie "Zhang", 100).
+   */
+  private Map<String, Object> withdrawMultipleTimesAndRetrieveCustomerData(User customer, double withdrawAmount, int times) {
+    for(int i = 0; i < times; i++) {
+      customer.setAmountToWithdraw(withdrawAmount);
+      controller.submitWithdraw(customer);
+    }
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    return customersTableData.get(0);
+  }
+
+  private void shuffleDepositsAndWithDraws()
+
+
+  /**
+  * Verifies that when a customer's bank account increases by $20 or more,
+  * the customer's deposit for interest increases and doesn't when 
+  *
+  * Assumes the customer's deposit for interest starts at 0 and is not in overdraft
+  *
+  * @throws SQLException
+  * @throws ScriptException
+  */
+  @Test 
+  public void testDepositsForInterestIncrementsByOneForEachDepositLessThan5() throws SQLException, ScriptException {
+    // initialize customer1 with a balance of $123.45 (to make sure this works for non-whole dollar amounts). represented as pennies in the DB.
+    double CUSTOMER1_BALANCE = 123.45;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+    // Prepare Deposit Form to Deposit $20 to customer 1's account.
+    double CUSTOMER1_AMOUNT_TO_DEPOSIT = 20; // user input is in dollar amount, not pennies.
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+
+    //1st deposit for interest
+    Map<String,Object> customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    assertEquals(1, (int) customer1Data.get("NumDepositsForInterest"));
+
+    //2nd deposit for interest
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 21;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    assertEquals(2, (int) customer1Data.get("NumDepositsForInterest"));
+
+    //Verify that deposits below $20 do not increment the interest deposit count.
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 19.99;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    assertEquals(2, (int) customer1Data.get("NumDepositsForInterest"));
+
+    //3rd deposit for interest
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 40;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    assertEquals(3, (int) customer1Data.get("NumDepositsForInterest"));
+  }
+
+  /**
+  * Verifies the the customer's balance gets the interest rate after 5 deposits for interest
+  *
+  * Assumes the customer is not in overdraft before hand
+  *
+  * @throws SQLException
+  * @throws ScriptException
+  */
+  @Test 
+  public void testDepositsForInterestAppliesAndResetsAfter5ValidDeposits() throws SQLException, ScriptException {
+    double CUSTOMER1_BALANCE = 0;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+    // Prepare Deposit Form to Deposit $20 to customer 1's account.
+    double CUSTOMER1_AMOUNT_TO_DEPOSIT = 20; // user input is in dollar amount, not pennies.
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    
+    //4 deposits for interest
+    Map<String,Object> customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 4);
+    assertEquals(4, (int) customer1Data.get("NumDepositsForInterest"));
+    int expectedBankBalanceBeforeInterest =  4*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+
+    // 5th deposit for interest
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    expectedBankBalanceBeforeInterest += MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    
+    //test if the interest is applied and that the deposits for interest is reset
+    assertEquals((int) (expectedBankBalanceBeforeInterest*MvcController.INTEREST_RATE), (int) customer1Data.get("Balance"));
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+  }
+
+/**
+  * Verifies that the customer's balance is correct after various deposits.
+  * Some deposits are deposits for interest while others are not.
+  *
+  * Assumes the customer is not in overdraft before hand
+  * 
+  * @throws SQLException
+  * @throws ScriptException
+  */
+  @Test 
+  public void testBalanceIsCorrectAppliedAfterArbitraryDeposits() throws SQLException, ScriptException {
+    double CUSTOMER1_BALANCE = 0;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+    // Prepare Deposit Form to Deposit $19.99 to customer 1's account.
+    double CUSTOMER1_AMOUNT_TO_DEPOSIT = 19.99; // user input is in dollar amount, not pennies.
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    
+    // 4 deposits that do not add towards interest, though the amount is really close to being eligible
+    Map<String,Object> customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 4);
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+    int expectedBankBalance =  4*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    // test that no interest is applied
+    assertEquals(expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+
+    // 5 deposits for interest
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 20;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 5);
+    expectedBankBalance += 5*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    expectedBankBalance = (int) (expectedBankBalance*MvcController.INTEREST_RATE);
+
+    //test if the interest is applied and that the deposits for interest is reset
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+
+    // 5 deposits for interest
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 20.01;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 5);
+    expectedBankBalance += 5*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    expectedBankBalance = (int) (expectedBankBalance*MvcController.INTEREST_RATE);
+    //test if the interest is applied and that the deposits for interest is reset
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+
+    // 3 deposits for interest 
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 20;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 3);
+    expectedBankBalance += 3*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    // test that no interest is applied but the deposits for interest is updated
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(3, (int) customer1Data.get("NumDepositsForInterest"));
+
+    // 5 deposits that do not add towards interest, though the amount is really close to being eligible
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 19.99;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 5);
+    expectedBankBalance +=  5*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    // test that no interest is applied
+    assertEquals(expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(3, (int) customer1Data.get("NumDepositsForInterest"));
+
+    // 2 deposits for interests (since we have 3, this should put us to 5 total for this round)
+    CUSTOMER1_AMOUNT_TO_DEPOSIT = 20.01;
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 2);
+    expectedBankBalance += 2*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    expectedBankBalance = (int) (expectedBankBalance*MvcController.INTEREST_RATE);
+    //test if the interest is applied and that the deposits for interest is reset
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+  }
+
+  /**
+  * Verifies that customer withdraws do not count towards deposits for interest
+  *
+  * Assumes the customer is not in overdraft before hand and that withdraws will not result in overdraft
+  *
+  * @throws SQLException
+  * @throws ScriptException
+  */
+  @Test
+  public void testDepositsForInterestAreNotAppliedForWithdraws() throws SQLException, ScriptException {
+    // initialize customer1 with a balance of $123.45 (to make sure this works for non-whole dollar amounts). represented as pennies in the DB.
+    double CUSTOMER1_BALANCE = 123.45;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+    
+    // user input is in dollar amount, not pennies.
+    double CUSTOMER1_AMOUNT_TO_WITHDRAW = 20; // Value can be anything as long as there are no overdrafts
+    double CUSTOMER1_AMOUNT_TO_DEPOSIT = 20; // Value can be >= 20
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    
+    int expectedBankBalance  = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    // test that a withdraw to a customer's balance does not cause changes to a user's deposit to interest 
+    Map<String,Object> customer1Data = withdrawMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_WITHDRAW, 1);
+    expectedBankBalance  -= MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_WITHDRAW);
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+    
+    // test that a deposit for interest after a withdraw is counted
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    expectedBankBalance  += MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(1, (int) customer1Data.get("NumDepositsForInterest"));
+
+    // test that deposits of interests and withdraws of $20 or more do not cancel each other
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 3);
+    expectedBankBalance  += 3*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    assertEquals(expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(4, (int) customer1Data.get("NumDepositsForInterest"));
+    
+    customer1Data = withdrawMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_WITHDRAW, 3);
+    expectedBankBalance  -= 3*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_WITHDRAW);
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+    assertEquals(4, (int) customer1Data.get("NumDepositsForInterest"));
+
+    // Test that the 5th deposit for interest after withdraws still works as expected
+    customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    expectedBankBalance += MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+    expectedBankBalance = (int) (expectedBankBalance*MvcController.INTEREST_RATE);
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+    assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+
+  } 
+
+  /**
+   * Verifies that if a user is in overdraft, a deposit that gives them a balance of >= $20 
+   * will count as a deposit of interest
+   * 
+   * Assumes that the user is in overdraft
+   * 
+   * @throws SQLException
+   * @throws ScriptException
+   */
+  @Test
+  public void testDepositForInterestIsAppliedAfterOverdraftIfBalanceIs20OrGreater() throws SQLException, ScriptException {
+    double CUSTOMER1_BALANCE = -30;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+    // Prepare Deposit Form to Deposit $50 to customer 1's account.
+    double CUSTOMER1_AMOUNT_TO_WITHDRAW = -60;
+    double CUSTOMER1_AMOUNT_TO_DEPOSIT = 50; // user input is in dollar amount, not pennies.
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    
+    // tests that a user recieves a deposit of interest if it he/she deposits their overdraft amount + $20
+    Map<String,Object> customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    assertEquals(1, (int) customer1Data.get("NumDepositsForInterest"))
+
+  }
+
+  /**
+   * Verifies that if a user is in overdraft, a deposit that gives them a balance of < $20 
+   * will not count as a deposit of interest
+   * 
+   * Assumes that the user is in overdraft
+   * @throws SQLException
+   * @throws ScriptException
+   */
+  @Test
+  public void testDepositForInterestIsNotAppliedAfterOverdraftIfBalanceIsLessThan20() throws SQLException, ScriptException {
+    double CUSTOMER1_BALANCE = -30;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+    
+    // Prepare Deposit Form to Deposit $49.99 to customer 1's account.
+    double CUSTOMER1_AMOUNT_TO_DEPOSIT = 49.99; // user input is in dollar amount, not pennies.
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    
+    // tests that a user will not recievea deposit of interest if he/she deposits their overdraft amount + <$20
+    Map<String,Object> customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 1);
+    assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+  }
+
+  /**
+   * Verifies that if a user withdraws an amount that causes an overdraft, 
+   * as long as the user applies deposits an amount that puts the user back at a balance of >=$20
+   * it will count as a deposit of interest
+   * 
+   * @throws SQLException
+   * @throws ScriptException
+   */
+  @Test 
+  public void testBalanceIsCorrectBalanceAfterArbitraryDepositsAndWithdraws() throws SQLException, ScriptException {
+        // initialize customer1 with a balance of $100(to make sure this works for non-whole dollar amounts). represented as pennies in the DB.
+        double CUSTOMER1_BALANCE = 100;
+        int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+        MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+        
+        // user input is in dollar amount, not pennies.
+        double CUSTOMER1_AMOUNT_TO_WITHDRAW = 200; 
+        double CUSTOMER1_AMOUNT_TO_DEPOSIT = 20; 
+        User customer1DepositFormInputs = new User();
+        customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+        customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+        
+        int expectedBankBalance  = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+        // test that a withdraw to a customer's balance that causes overdraft does not change the number of deposits for interest
+        Map<String,Object> customer1Data = withdrawMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_WITHDRAW, 1);
+        expectedBankBalance  -= MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_WITHDRAW);
+        assertEquals(expectedBankBalance, (int) customer1Data.get("Balance"));
+        assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+        
+        // test that deposits of >=$20 that does not get rid of overdraft does not count towards deposits for interest
+        customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 5);
+        expectedBankBalance  += 5*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+        assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+        assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+    
+        // test that deposits of 
+        customer1Data = withdrawMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_WITHDRAW, 2);
+        expectedBankBalance  -= 2*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_WITHDRAW);
+        assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+        assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+    
+        // Test that 5 deposits of interests after depositing enough to outset the overdraft withdraws still provides the interests
+        customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 13);
+        expectedBankBalance += 13*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
+        expectedBankBalance = (int) (expectedBankBalance*MvcController.INTEREST_RATE);
+        assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
+        assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
+  }
+
 }
