@@ -99,4 +99,33 @@ public class User {
   @Setter @Getter
   private int numDepositsForInterest;
 
+  /* Final Project Starts */
+
+  //// Borrower and Lender Fields ////
+
+  @Setter @Getter @ToString.Include
+  private String borrowerId;
+
+  @Setter @Getter @ToString.Include
+  private String lenderId;
+
+  @Setter @Getter @Positive
+  private double amountToBorrow;
+
+  @Setter @Getter @Positive
+  private double amountToLend;
+
+  @Setter @Getter @Positive
+  private double amountToRepay;
+
+  @Setter @Getter @ToString.Include
+  private String reason;
+
+  @Setter @Getter @ToString.Include
+  private String timestamp;
+  
+  @Setter @Getter @Positive
+  private int liabilities;
+
+  /* Final Project Ends */
 }

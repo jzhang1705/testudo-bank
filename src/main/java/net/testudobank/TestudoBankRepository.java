@@ -177,4 +177,101 @@ public class TestudoBankRepository {
       return false;
     }
   }
+
+  /* Final Project Starts */
+
+  public static void insertRowToBorrowerRequests(JdbcTemplate jdbcTemplate, String customerID, String timestamp, String reasonForRequest, int moneyRequested) {
+    String insertBorrowerSql = String.format("INSERT INTO BorrowerRequests VALUES ('%s', '%s', '%s', %d, %d);",
+                                                    customerID,
+                                                    timestamp,
+                                                    reasonForRequest,
+                                                    moneyRequested,
+                                                    0);
+    jdbcTemplate.update(insertBorrowerSql);
+  }
+
+  public static void setCustomerLiabilities(JdbcTemplate jdbcTemplate, String customerID, int liabilities) {
+    String liabilitiesUpdateSql = String.format("UPDATE Customers SET Liabilities = %d WHERE CustomerID='%s';", liabilities, customerID);
+    jdbcTemplate.update(liabilitiesUpdateSql);
+  }
+
+  public static int getCustomerLiabilities(JdbcTemplate jdbcTemplate, String customerID) {
+    String getCustomerLiabilitiesSql = String.format("SELECT Liabilities FROM Customers WHERE CustomerID='%s';", customerID);
+    int customerLiabilities = jdbcTemplate.queryForObject(getCustomerLiabilitiesSql, Integer.class);
+    return customerLiabilities;
+  }
+
+  public static boolean doesBorrowRequestExist(JdbcTemplate jdbcTemplate, String borrowerID, String timestamp) {
+    String getBorrowRequestSql =  String.format("SELECT CustomerId FROM BorrowerRequests WHERE CustomerID='%s' and Timestamp = '%s';", borrowerID, timestamp);
+    if (jdbcTemplate.queryForObject(getBorrowRequestSql, String.class) != null) {
+      return true;
+     } else {
+       return false;
+     }
+  }
+
+  public static int getBorrowerRequestMoneyRequested(JdbcTemplate jdbcTemplate, String borrowerID, String timestamp) {
+    String getBorrowRequestMoneyRequestedSql =  String.format("SELECT MoneyRequested FROM BorrowerRequests WHERE CustomerID='%s' and Timestamp = '%s';", borrowerID, timestamp);
+    int moneyRequested = jdbcTemplate.queryForObject(getBorrowRequestMoneyRequestedSql, Integer.class);
+    return moneyRequested;
+  }
+
+  public static int getBorrowerRequestMoneyRecieved(JdbcTemplate jdbcTemplate, String borrowerID, String timestamp) {
+    String getBorrowRequestMoneyRecievedSql =  String.format("SELECT MoneyRecieved FROM BorrowerRequests WHERE CustomerID='%s' and Timestamp = '%s';", borrowerID, timestamp);
+    int moneyRecieved= jdbcTemplate.queryForObject(getBorrowRequestMoneyRecievedSql, Integer.class);
+    return moneyRecieved;
+  }
+
+  public static void insertRowToLiabilitiesTable(JdbcTemplate jdbcTemplate, String lenderID, String borrowerID, String timestamp, int amountOwed) {
+    String insertRowToLiabilitiesSql = String.format("INSERT INTO LiabilitiesTable VALUES ('%s', '%s', '%s', %d);",
+                                                    lenderID,
+                                                    borrowerID,
+                                                    timestamp,
+                                                    amountOwed);
+    jdbcTemplate.update(insertRowToLiabilitiesSql);
+  }
+
+  public static boolean doesLiabilityExist(JdbcTemplate jdbcTemplate, String lenderID, String borrowerID, String timestamp) {
+    String getLiabilitySql = String.format("SELECT AmountOwed FROM LiabilitiesTable WHERE lenderID='%s' and borrowerID = '%s' and Timestamp = '%s';", lenderID, borrowerID, timestamp);
+    if (jdbcTemplate.queryForObject(getLiabilitySql, Integer.class) != null) {
+       return true;
+     } else {
+       return false;
+     }
+  }
+
+  public static int getAmountOwed(JdbcTemplate jdbcTemplate, String lenderID, String borrowerID, String timestamp) {
+    String getAmountOwedSql = String.format("SELECT AmountOwed FROM LiabilitiesTable WHERE lenderID='%s' and borrowerID = '%s' and Timestamp = '%s';", lenderID, borrowerID, timestamp);
+    int amountOwed = jdbcTemplate.queryForObject(getAmountOwedSql, Integer.class);
+    return amountOwed;
+  }
+
+  public static void deleteRowFromLiabilitiesTable(JdbcTemplate jdbcTemplate, String lenderID, String borrowerID, String timestamp) {
+    String deleteRowFromiabilitiesTableSql = String.format("DELETE from LiabilitiesTable where lenderID='%s' AND borrowerID = '%s' AND Timestamp='%s';", lenderID, borrowerID, timestamp);
+    jdbcTemplate.update(deleteRowFromiabilitiesTableSql);
+  }
+
+  public static void deleteRowFromBorrowerRequest(JdbcTemplate jdbcTemplate, String customerID, String timestamp) {
+    String deleteRowBorrowerRequestSql = String.format("DELETE from BorrowerRequest where CustomerID='%s'AND Timestamp='%s';", customerID, timestamp);
+    jdbcTemplate.update(deleteRowBorrowerRequestSql);
+  }
+
+  public static void setAmountDueInLiabilitiesTable(JdbcTemplate jdbcTemplate, String lenderID, String borrowerID, String timestamp, int amountOwed) {
+    String setAmountDueInLiabilitiesTableSql = String.format("UPDATE LiabilitiesTable SET AmountOwed = %d WHERE LenderID='%s' AND BorrowerID = '%s' AND Timestamp = '%s';", 
+                                                            amountOwed, 
+                                                            lenderID,
+                                                            borrowerID,
+                                                            timestamp);
+    jdbcTemplate.update(setAmountDueInLiabilitiesTableSql);
+  }
+
+  public static void setMoneyRecievedInBorrowerRequests(JdbcTemplate jdbcTemplate, String borrowerID, String timestamp, int moneyRecieved) {
+    String setsetMoneyRecievedInBorrowerRequestsSql = String.format("Update BorrowerRequests SET MoneyRecieved = %d WHERE BorrowerID = '%s' AND Timestamp = '%s';",
+                                                                    moneyRecieved,
+                                                                    borrowerID,
+                                                                    timestamp);
+    jdbcTemplate.update(setsetMoneyRecievedInBorrowerRequestsSql);
+  }
+
+  /* Final Project Ends */
 }

@@ -11,7 +11,8 @@ num_customers_to_add = 100
 connection = pymysql.connect(host=mysql_endpoint, user=username, passwd = password, db=database_name)
 cursor = connection.cursor()
 
-# Make empty Customers table
+# Final Project: Added Liabilities Int
+# Make empty Customers table 
 create_customer_table_sql = '''
   CREATE TABLE Customers (
     CustomerID varchar(255),
@@ -21,6 +22,7 @@ create_customer_table_sql = '''
     OverdraftBalance int,
     NumFraudReversals int,
     NumDepositsForInterest int
+    Liabilities int
   );
   '''
 cursor.execute(create_customer_table_sql)
@@ -92,7 +94,30 @@ CREATE TABLE CryptoHistory (
 '''
 cursor.execute(create_cryptohistory_table_sql)
 
+# Final Project Starts
+# Make empty Borrowers table
+create_borrowerrequest_table_sql = '''
+CREATE TABLE BorrowerRequests (
+  CustomerID varchar(255),
+  Timestamp DATETIME,
+  ReasonForRequest varchar(255),
+  MoneyRequested int
+  MoneyRecieved int
+);
+'''
+cursor.execute(create_borrowerrequest_table_sql)
 
+# Make empty Liabilities table
+create_liabilities_table_sql = '''
+  CREATE TABLE LiabilitiesTable (
+    LenderID varchar(255),
+    BorrowerID varchar(255),
+    Timestamp DATETIME,
+    AmountOwed int
+  );
+'''
+cursor.execute(create_liabilities_table_sql)
+# Final Project Ends
 
 # The two sets created below are used to ensure that this
 # automated, randomized process does not accidentally 
@@ -126,6 +151,7 @@ for i in range(num_customers_to_add):
     # add random customer ID, name, and balance to Customers table.
     # all customers start with Overdraft balance of 0
     # all customers start with a NumFraudReversals of 0
+     # all customers start with a Liabilities of 0
     # both the balance and overdraftbalance columns represent the total dollar amount as pennies instead of dollars.
     insert_customer_sql = '''
     INSERT INTO Customers
@@ -134,6 +160,7 @@ for i in range(num_customers_to_add):
                 "'" + customer_first_name + "'",
                 "'" + customer_last_name + "'",
                 customer_balance,
+                0,
                 0,
                 0,
                 0)

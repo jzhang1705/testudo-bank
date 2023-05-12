@@ -180,6 +180,55 @@ public class MvcController {
 		return "sellcrypto_form";
 	}
 
+  /* Final Project Starts */
+  /**
+   * HTML GET request handler that serves the "borrower_form" page to the user.
+   * An empty `User` object is also added to the Model as an Attribute to store
+   * the user's input for selling cryptocurrency.
+   * 
+   * @param model
+   * @return "sellcrypto_form" page
+   */
+  @GetMapping("/borrow")
+	public String showBorrowerForm(Model model) {
+    User user = new User();
+    model.addAttribute("user", user);
+    return "borrower_form";
+	}
+
+    /**
+   * HTML GET request handler that serves the "lender_form" page to the user.
+   * An empty `User` object is also added to the Model as an Attribute to store
+   * the user's input for selling cryptocurrency.
+   * 
+   * @param model
+   * @return "sellcrypto_form" page
+   */
+  @GetMapping("/lend")
+	public String showLenderForm(Model model) {
+    User user = new User();
+    model.addAttribute("user", user);
+    return "lender_form";
+	}
+
+      /**
+   * HTML GET request handler that serves the "repay_form" page to the user.
+   * An empty `User` object is also added to the Model as an Attribute to store
+   * the user's input for selling cryptocurrency.
+   * 
+   * @param model
+   * @return "sellcrypto_form" page
+   */
+  @GetMapping("/repay")
+	public String showRepayForm(Model model) {
+    User user = new User();
+    model.addAttribute("user", user);
+    return "repay_form";
+	}
+
+
+  /* Final Project Ends */
+
   //// HELPER METHODS ////
 
   /**
@@ -238,11 +287,21 @@ public class MvcController {
     user.setEthPrice(cryptoPriceClient.getCurrentEthValue());
     user.setSolPrice(cryptoPriceClient.getCurrentSolValue());
     user.setNumDepositsForInterest(user.getNumDepositsForInterest());
+
+    /* Final Project Starts */
+    user.setLiabilities(TestudoBankRepository.getCustomerLiabilities(jdbcTemplate, user.getUsername()));
+    /* Final Project Ends */
+
   }
 
   // Converts dollar amounts in frontend to penny representation in backend MySQL DB
   private static int convertDollarsToPennies(double dollarAmount) {
     return (int) (dollarAmount * 100);
+  }
+
+  // Applies interest rate to pennies (Assignment 1)
+  private static int applyInterestRateToPennyAmount(int pennyAmount) {
+    return (int) (pennyAmount*INTEREST_RATE);
   }
 
   // Converts LocalDateTime to Date variable
@@ -298,6 +357,9 @@ public class MvcController {
    * If the user is in overdraft, the deposit amount first pays off the overdraft balance,
    * and any excess deposit amount is added to the main balance.
    * 
+   * If the amount that is added to the main balance is greater than or equal to $20, 
+   * we count that as a deposit for interest
+   * 
    * @param user
    * @return "account_info" page if valid deposit request. Otherwise, redirect to "welcome" page.
    */
@@ -340,10 +402,20 @@ public class MvcController {
       if (userDepositAmtInPennies > userOverdraftBalanceInPennies) {
         int mainBalanceIncreaseAmtInPennies = userDepositAmtInPennies - userOverdraftBalanceInPennies;
         TestudoBankRepository.increaseCustomerCashBalance(jdbcTemplate, userID, mainBalanceIncreaseAmtInPennies);
+        // increase deposit for interest by 1 if mainBalanceIncreaseAmtInPennies >= 2000
+        if(mainBalanceIncreaseAmtInPennies >= 2000) {
+          int customerDepositsForInterest = TestudoBankRepository.getCustomerNumberOfDepositsForInterest(jdbcTemplate, userID);
+          TestudoBankRepository.setCustomerNumberOfDepositsForInterest(jdbcTemplate, userID, customerDepositsForInterest + 1);
+        }
       }
 
     } else { // simple deposit case
       TestudoBankRepository.increaseCustomerCashBalance(jdbcTemplate, userID, userDepositAmtInPennies);
+       // increase deposit for interest by 1 if userDepositAmtInPennies >= 2000
+      if(userDepositAmtInPennies >= 2000) {
+        int customerDepositsForInterest = TestudoBankRepository.getCustomerNumberOfDepositsForInterest(jdbcTemplate, userID);
+        TestudoBankRepository.setCustomerNumberOfDepositsForInterest(jdbcTemplate, userID, customerDepositsForInterest + 1);
+      }
     }
 
     // only adds deposit to transaction history if is not transfer
@@ -410,7 +482,7 @@ public class MvcController {
     int userOverdraftBalanceInPennies = TestudoBankRepository.getCustomerOverdraftBalanceInPennies(jdbcTemplate, userID);
     if (userWithdrawAmtInPennies > userBalanceInPennies) { // if withdraw amount exceeds main balance, withdraw into overdraft with interest fee
       int excessWithdrawAmtInPennies = userWithdrawAmtInPennies - userBalanceInPennies;
-      int newOverdraftIncreaseAmtAfterInterestInPennies = (int)(excessWithdrawAmtInPennies * INTEREST_RATE);
+      int newOverdraftIncreaseAmtAfterInterestInPennies = applyInterestRateToPennyAmount(excessWithdrawAmtInPennies); // (int)(excessWithdrawAmtInPennies * INTEREST_RATE);
       int newOverdraftBalanceInPennies = userOverdraftBalanceInPennies + newOverdraftIncreaseAmtAfterInterestInPennies;
 
       // abort withdraw transaction if new overdraft balance exceeds max overdraft limit
@@ -799,15 +871,307 @@ public class MvcController {
   }
 
   /**
+   * Adds interest to the customer's bank balance if the customer's deposits for interest is 5
+   * and resets it to 0
    * 
+   * If the customer's deposts for interest is between 0 and 4 inclusive, no interest is applied
+   * 
+   * If the customer's deposts for interest is greater than 5 or less than 0, something is wrong
    * 
    * @param user
    * @return "account_info" if interest applied. Otherwise, redirect to "welcome" page.
    */
   public String applyInterest(@ModelAttribute("user") User user) {
+    String userID = user.getUsername();
+    int customerDepositsForInterest = TestudoBankRepository.getCustomerNumberOfDepositsForInterest(jdbcTemplate, userID);
 
+    //Applies interest to user bank balance and resets deposits for interest to 0
+    if(customerDepositsForInterest == 5) {
+      int userBalanceInPennies = TestudoBankRepository.getCustomerCashBalanceInPennies(jdbcTemplate, userID);
+      int newBalanceInPenniesAfterInterest = (int) (userBalanceInPennies*INTEREST_RATE);
+      TestudoBankRepository.setCustomerCashBalance(jdbcTemplate, userID, newBalanceInPenniesAfterInterest);
+      TestudoBankRepository.setCustomerNumberOfDepositsForInterest(jdbcTemplate, userID, 0);
+      return "account_info";
+
+    // Error Case
+    } else if (customerDepositsForInterest > 5 || customerDepositsForInterest < 0) {
+      // Something is wrong with our implementation
+    }
     return "welcome";
 
   }
+
+  /* Final Project Starts */
+
+  /**
+   * HTML POST request handler for the Borrower Form page.
+   * 
+   * @param user
+   * @return "account_info" page if withdraw request is valid. Otherwise, redirect to "welcome" page.
+   */
+  @PostMapping("/borrow")
+  public String submitBorrowerForm(@ModelAttribute("user") User user) {
+    String userID = user.getUsername();
+    String userPasswordAttempt = user.getPassword();
+    String userPassword = TestudoBankRepository.getCustomerPassword(jdbcTemplate, userID);
+
+    //// Invalid Input/State Handling ////
+
+    // unsuccessful login
+    if (userPasswordAttempt.equals(userPassword) == false) {
+      return "welcome";
+    }
+
+    // If customer already has too many reversals, their account is frozen. Don't allow them to borrow.
+    int numOfReversals = TestudoBankRepository.getCustomerNumberOfReversals(jdbcTemplate, userID);
+    if (numOfReversals >= MAX_DISPUTES){
+      return "welcome";
+    }
+
+    // Negative borrow requests are not allowed
+    double userBorrowAmt = user.getAmountToBorrow();
+    if (userBorrowAmt < 0) {
+      return "welcome";
+    }
+
+    //// Complete Borrower Form ////
+    int userBorrowAmtInPennies = convertDollarsToPennies(userBorrowAmt); // dollar amounts stored as pennies to avoid floating point errors
+    String currentTime = SQL_DATETIME_FORMATTER.format(new java.util.Date()); // use same timestamp for all logs created by this deposit
+    String userReasonForRequest = user.getReason();
+
+    TestudoBankRepository.insertRowToBorrowerRequests(jdbcTemplate, userID, currentTime, userReasonForRequest, userBorrowAmtInPennies);
+    
+    // int customerLiabilities = TestudoBankRepository.getCustomerLiabilities(jdbcTemplate, userID);
+    // customerLiabilities += userBorrowAmtInPennies;
+    // TestudoBankRepository.setCustomerLiabilities(jdbcTemplate, userID, customerLiabilities);
+  
+    // update Model so that View can access new main balance, overdraft balance, and logs
+    updateAccountInfo(user);
+    return "account_info";
+
+  }
+
+  /**
+   * HTML POST request handler for the Lender Form page.
+   * 
+   * The same username+password handling from the login page is used.
+   * 
+   * If the password attempt is correct, the lender's loan successfully goes through
+   * if it is a valid loan. Both the lender's and customer's balances are properly updated.
+   * 
+   * If the password attempt is incorrect, the lender is redirected to the "welcome" page.
+   * 
+   * Lender function is implemented by re-using deposit and withdraw handlers to 
+   * facilitate a transfer between 2 users.
+   * 
+   * @param user
+   * @return "account_info" page if login successful. Otherwise, redirect to "welcome" page.
+   */
+  @PostMapping("/lend")
+  public String submitLenderForm(@ModelAttribute("user") User lender) {
+
+    // checks to see the borrower you are lending to exists
+    if (!TestudoBankRepository.doesCustomerExist(jdbcTemplate, lender.getBorrowerId())){
+      return "welcome";
+    }
+
+    // checks to see if the borrower you are lending to filed the borrow request 
+    if (!TestudoBankRepository. doesBorrowRequestExist(jdbcTemplate, lender.getBorrowerId(), lender.getTimestamp())){
+      return "welcome";
+    }
+
+    String lenderUserID = lender.getUsername();
+    String lenderPasswordAttempt = lender.getPassword();
+    String lenderPassword = TestudoBankRepository.getCustomerPassword(jdbcTemplate, lenderUserID);
+    // creates new user for borrower
+    User borrower = new User();
+    String borrowerID = lender.getBorrowerId();
+    String borrowerPassword = TestudoBankRepository.getCustomerPassword(jdbcTemplate, borrowerID);
+    borrower.setUsername(borrowerID);
+    borrower.setPassword(borrowerPassword);
+
+    // sets isTransfer to true for sender and recipient
+    lender.setTransfer(true);
+    borrower.setTransfer(true);
+
+    /// Invalid Input/State Handling ///
+
+    // unsuccessful login
+    if (lenderPasswordAttempt.equals(lenderPassword) == false) {
+      return "welcome";
+    }
+
+    // case where lender already has too many reversals
+    int numOfReversals = TestudoBankRepository.getCustomerNumberOfReversals(jdbcTemplate, lenderUserID);
+    if (numOfReversals >= MAX_DISPUTES) {
+      return "welcome";
+    }
+
+    // case where lender tries to send money to themselves
+    if (lender.getTransferRecipientID().equals(lenderUserID)){
+      return "welcome";
+    }
+
+    // initialize variables for lending amount
+    double lendAmount = lender.getAmountToLend();
+    int lendAmountInPennies = convertDollarsToPennies(lendAmount);
+
+    // negative transfer amount is not allowed
+    if (lendAmount < 0) {
+      return "welcome";
+    } 
+
+    String timestamp = lender.getTimestamp();
+
+    // Update Borrower Request Table and Handle Edge Cases //
+
+    int borrowerMoneyRequested = TestudoBankRepository.getBorrowerRequestMoneyRequested(jdbcTemplate, borrowerID, timestamp);
+    int borrowerMoneyRecieved = TestudoBankRepository.getBorrowerRequestMoneyRecieved(jdbcTemplate, borrowerID, timestamp);
+    int borrowerMoneyNeeded = borrowerMoneyRequested - borrowerMoneyRecieved;
+    
+    // If lender is offering to lend more money than needed, only let them lend the appropriate amount of money
+    if(borrowerMoneyNeeded <= lendAmountInPennies) {
+      lendAmountInPennies = borrowerMoneyNeeded;
+      // remove the the entry from borrowerRequests
+      TestudoBankRepository.deleteRowFromBorrowerRequest(jdbcTemplate, borrowerID, timestamp);
+    } else { // update row from borrower's request
+
+      TestudoBankRepository.setMoneyRecievedInBorrowerRequests(jdbcTemplate, borrowerID, timestamp, borrowerMoneyNeeded);
+    }
+
+    String currentTime = SQL_DATETIME_FORMATTER.format(new java.util.Date()); // use same timestamp for all logs created by this transfer
+
+    // withdraw transfer amount from lender and deposit into borrower's account
+    lender.setAmountToWithdraw(lendAmountInPennies/100.0);
+    submitWithdraw(lender);
+
+    borrower.setAmountToDeposit(lendAmountInPennies/100.0);
+    submitDeposit(borrower);
+
+    // Inserting transfer into transfer history for both customers
+    TestudoBankRepository.insertRowToTransferLogsTable(jdbcTemplate, lenderUserID, borrowerID, currentTime, lendAmountInPennies);
+
+    // Add to transaction to LiabilitiesTable
+    int amountOwed = (int) (lendAmountInPennies*INTEREST_RATE);
+    TestudoBankRepository.insertRowToLiabilitiesTable(jdbcTemplate, lenderUserID, borrowerID, currentTime, amountOwed);
+
+    // Update liabilities for borrower (in Customers table)
+    int borrowerLiabilities = TestudoBankRepository.getCustomerLiabilities(jdbcTemplate, borrowerID);
+    borrowerLiabilities += amountOwed;
+    TestudoBankRepository.setCustomerLiabilities(jdbcTemplate, borrowerID, borrowerLiabilities);
+
+    updateAccountInfo(lender);
+    return "account_info";
+  }
+
+    /**
+   * HTML POST request handler for the Repay Form page.
+   * 
+   * The same username+password handling from the login page is used.
+   * 
+   * If the password attempt is correct, the borrower's repayment successfully goes through
+   * if it is a valid repayment. Both the lender's and customer's balances are properly updated.
+   * 
+   * If the password attempt is incorrect, the borrower is redirected to the "welcome" page.
+   * 
+   * repay function is implemented by re-using deposit and withdraw handlers to 
+   * facilitate a transfer between 2 users.
+   * 
+   * @param user
+   * @return "account_info" page if login successful. Otherwise, redirect to "welcome" page.
+   */
+  @PostMapping("/repay")
+  public String submitRepayForm(@ModelAttribute("user") User borrower) {
+
+    // checks to see the lender you are repaying to exists
+    if (!TestudoBankRepository.doesCustomerExist(jdbcTemplate, borrower.getBorrowerId())){
+      return "welcome";
+    }
+
+    // checks to see the liability the borrower is paying back to exists
+    if (!TestudoBankRepository.doesCustomerExist(jdbcTemplate, borrower.getBorrowerId())){
+      return "welcome";
+    }
+
+    String borrowerUserID = borrower.getUsername();
+    String borrowerPasswordAttempt = borrower.getPassword();
+    String borrowerPassword = TestudoBankRepository.getCustomerPassword(jdbcTemplate, borrowerUserID);
+
+    // creates new user for lender
+    User lender = new User();
+    String lenderID = borrower.getLenderId();
+    String lenderPassword = TestudoBankRepository.getCustomerPassword(jdbcTemplate, lenderID);
+    lender.setUsername(lenderID);
+    lender.setPassword(lenderPassword);
+
+    // sets isTransfer to true for sender and recipient
+    lender.setTransfer(true);
+    borrower.setTransfer(true);
+
+    /// Invalid Input/State Handling ///
+
+    // unsuccessful login
+    if (borrowerPasswordAttempt.equals(borrowerPassword) == false) {
+      return "welcome";
+    }
+
+    // case where borrower already has too many reversals
+    int numOfReversals = TestudoBankRepository.getCustomerNumberOfReversals(jdbcTemplate, borrowerUserID);
+    if (numOfReversals >= MAX_DISPUTES) {
+      return "welcome";
+    }
+
+    // case where borrower tries to send money to themselves
+    if (borrower.getTransferRecipientID().equals(borrowerUserID)){
+      return "welcome";
+    }
+
+    // initialize variables for repay amount
+    double repayAmount = borrower.getAmountToRepay();
+    int repayAmountInPennies = convertDollarsToPennies(repayAmount);
+
+    // negative repayment amount is not allowed
+    if (repayAmount < 0) {
+      return "welcome";
+    } 
+
+    String timestamp = borrower.getTimestamp();
+
+    // Get the amount of money needed to pay back to the lender
+    int amountOwed = TestudoBankRepository.getAmountOwed(jdbcTemplate, lenderID, borrowerUserID, timestamp);
+
+    // If the amount of money sent for the repayment is greater than the amount owed, only repay the amount owed
+    if(amountOwed <= repayAmountInPennies) {
+      repayAmountInPennies = amountOwed;
+      // remove the entry from LiabilitiesTable
+      TestudoBankRepository.deleteRowFromLiabilitiesTable(jdbcTemplate, lenderID, borrowerUserID, timestamp);
+    } else {
+      // update LiabilitiesTable
+      amountOwed -= repayAmountInPennies;
+      TestudoBankRepository.setAmountDueInLiabilitiesTable(jdbcTemplate, lenderID, borrowerUserID, timestamp, amountOwed);
+    }
+
+    String currentTime = SQL_DATETIME_FORMATTER.format(new java.util.Date()); // use same timestamp for all logs created by this transfer
+
+    // withdraw transfer amount from borrower and deposit into lender's account
+    borrower.setAmountToWithdraw(repayAmountInPennies/100.0);
+    submitWithdraw(borrower);
+
+    lender.setAmountToDeposit(repayAmountInPennies/100.0);
+    submitDeposit(lender);
+
+    // Inserting transfer into transfer history for both customers
+    TestudoBankRepository.insertRowToTransferLogsTable(jdbcTemplate, lenderID, borrowerUserID, currentTime, repayAmountInPennies);
+
+    // Update liabilities for borrower (in Customers table)
+    int borrowerLiabilities = TestudoBankRepository.getCustomerLiabilities(jdbcTemplate, borrowerUserID);
+    borrowerLiabilities -= repayAmountInPennies;
+    TestudoBankRepository.setCustomerLiabilities(jdbcTemplate, borrowerUserID, borrowerLiabilities);
+
+    updateAccountInfo(borrower);
+    return "account_info";
+  }
+
+    /* Final Project Ends */
 
 }
