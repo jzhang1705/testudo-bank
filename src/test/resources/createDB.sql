@@ -5,7 +5,8 @@ CREATE TABLE Customers (
   Balance int,
   OverdraftBalance int,
   NumFraudReversals int,
-  NumDepositsForInterest int
+  NumDepositsForInterest int,
+  Liabilities int
 );
 
 CREATE TABLE Passwords (
@@ -47,4 +48,19 @@ CREATE TABLE CryptoHistory (
   Action varchar(255) CHECK (Action IN ('Buy', 'Sell')),
   CryptoName varchar(255),
   CryptoAmount decimal(30,18)
+);
+
+CREATE TABLE BorrowerRequests (
+  CustomerID varchar(255),
+  Timestamp DATETIME,
+  ReasonForRequest varchar(255),
+  MoneyRequested int
+  MoneyRecieved int
+);
+
+CREATE TABLE LiabilitiesTable (
+  LenderID varchar(255),
+  BorrowerID varchar(255),
+  Timestamp DATETIME,
+  AmountOwed int
 );

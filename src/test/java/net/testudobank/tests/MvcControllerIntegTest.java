@@ -1999,53 +1999,48 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
 
   }
 
+  @Test
+  public void pleaseWork() {
+    assertEquals(1,1);
+  }
+
   /**
-   * Verifies that if a user withdraws an amount that causes an overdraft, 
-   * as long as the user applies deposits an amount that puts the user back at a balance of >=$20
-   * it will count as a deposit of interest
+   * This test verifies that when a customer with no overdraft balance or too many referals will be able to borrow
    * 
-   * @throws SQLException
+   * 
+   * @throws SQLException 
    * @throws ScriptException
    */
-  // @Test 
-  // public void testBalanceIsCorrectBalanceAfterArbitraryDepositsAndWithdraws() throws SQLException, ScriptException {
-  //       // initialize customer1 with a balance of $100(to make sure this works for non-whole dollar amounts). represented as pennies in the DB.
-  //       double CUSTOMER1_BALANCE = 100;
-  //       int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
-  //       MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
-        
-  //       // user input is in dollar amount, not pennies.
-  //       double CUSTOMER1_AMOUNT_TO_WITHDRAW = 200; 
-  //       double CUSTOMER1_AMOUNT_TO_DEPOSIT = 20; 
-  //       User customer1DepositFormInputs = new User();
-  //       customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
-  //       customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
-        
-  //       int expectedBankBalance  = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
-  //       // test that a withdraw to a customer's balance that causes overdraft does not change the number of deposits for interest
-  //       Map<String,Object> customer1Data = withdrawMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_WITHDRAW, 1);
-  //       expectedBankBalance  -= MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_WITHDRAW);
-  //       assertEquals(expectedBankBalance, (int) customer1Data.get("Balance"));
-  //       assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
-        
-  //       // test that deposits of >=$20 that does not get rid of overdraft does not count towards deposits for interest
-  //       customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 5);
-  //       expectedBankBalance  += 5*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
-  //       assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
-  //       assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
-    
-  //       // test that deposits of 
-  //       customer1Data = withdrawMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_WITHDRAW, 2);
-  //       expectedBankBalance  -= 2*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_WITHDRAW);
-  //       assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
-  //       assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
-    
-  //       // Test that 5 deposits of interests after depositing enough to outset the overdraft withdraws still provides the interests
-  //       customer1Data = depositMultipleTimesAndRetrieveCustomerData(customer1DepositFormInputs, CUSTOMER1_AMOUNT_TO_DEPOSIT, 13);
-  //       expectedBankBalance += 13*MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_DEPOSIT);
-  //       expectedBankBalance = (int) (expectedBankBalance*MvcController.INTEREST_RATE);
-  //       assertEquals(0, (int) customer1Data.get("NumDepositsForInterest"));
-  //       assertEquals( expectedBankBalance, (int) customer1Data.get("Balance"));
-  // }
+  @Test
+  public void testBorrowRequest() throws SQLException, ScriptException {
+    //Initialize customer with a balance of $1000. Balance will be represented as pennies in DB.
+    double CUSTOMER1_BALANCE = 1000;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+
+    //Initializing users for the borrow request
+
+    double CUSTOMER1_AMOUNT_TO_BORROW = 10000;
+    int CUSTOMER1_AMOUNT_TO_BORROW_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_AMOUNT_TO_BORROW);
+    String CUSTOMER1_REASON_FOR_REQUEST= "I need help paying for college";
+    User CUSTOMER1 = new User();
+    CUSTOMER1.setUsername(CUSTOMER1_ID);
+    CUSTOMER1.setPassword(CUSTOMER1_PASSWORD);
+    CUSTOMER1.setAmountToBorrow(CUSTOMER1_AMOUNT_TO_BORROW);
+    CUSTOMER1.setReason(CUSTOMER1_REASON_FOR_REQUEST);
+
+    //Send the borrow request.
+    String returnedPage = controller.submitBorrowerForm(CUSTOMER1);
+
+    List<Map<String, Object>> customer1BorrowRequestSqlResult = jdbcTemplate.queryForList(String.format("SELECT * FROM BorrowerRequests WHERE CustomerID='%s' AND ReasonForRequest = '%s';", 
+                                                                CUSTOMER1_ID, 
+                                                                CUSTOMER1_REASON_FOR_REQUEST));
+    Map<String, Object> customer1BorrowRequest = customer1BorrowRequestSqlResult.get(0);
+    assertEquals(CUSTOMER1_AMOUNT_TO_BORROW_IN_PENNIES, (int) customer1BorrowRequest.get("MoneyRequested"));
+    assertEquals(0, (int) customer1BorrowRequest.get("MoneyRecieved"));
+
+    //Check that borrow request goes through.
+    assertEquals("account_info", returnedPage);
+  }
 
 }
